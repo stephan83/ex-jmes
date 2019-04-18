@@ -33,7 +33,7 @@ defmodule JMES.Functions do
 
   def call("avg", [list]) do
     with :ok <- list_of(list, :number) do
-      {:ok, Enum.reduce(list, 0, &(&1 + &2)) / length(list)}
+      {:ok, Enum.reduce(list, 0, &+/2) / length(list)}
     end
   end
 

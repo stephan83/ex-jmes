@@ -10,7 +10,7 @@ defmodule JMES.Parser do
   @type error :: {:error, any}
 
   @doc """
-  Parse a JMESPath expression into an Abstract Syntax Tree.
+  Parses a JMESPath expression into an Abstract Syntax Tree.
   """
   @spec parse(expr) :: {:ok, ast} | error
   def parse(expr) do
