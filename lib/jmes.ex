@@ -48,11 +48,20 @@ defmodule JMES do
     end
   end
 
+  @spec eval(ast, any, keyword) :: {:ok, any} | error
+
+  # ==============================================================================================
+  # Structs
+  # ==============================================================================================
+
+  defp eval(ast, %{__struct__: _} = struct, opts) do
+    eval(ast, Map.from_struct(struct), opts)
+  end
+
   # ==============================================================================================
   # Projection
   # ==============================================================================================
 
-  @spec eval(ast, any, keyword) :: {:ok, any} | error
   defp eval(ast, {:project, data}, opts) do
     List.foldr(data, {:ok, {:project, []}}, fn
       item, {:ok, {:project, list}} = acc ->
