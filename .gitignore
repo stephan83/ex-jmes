@@ -26,4 +26,4 @@ jmes-*.tar
 /src/*.erl
 
 # Language server files.
-/elixir_ls/
+/.elixir_ls/
