@@ -398,6 +398,10 @@ defmodule JMES do
     Enum.map(data, &unproject(&1))
   end
 
+  defp unproject(%{__struct__: _} = struct) do
+    unproject(Map.from_struct(struct))
+  end
+
   defp unproject(data) when is_map(data) do
     data
     |> Enum.map(fn {key, value} -> {key, unproject(value)} end)
