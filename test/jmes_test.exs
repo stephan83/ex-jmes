@@ -196,6 +196,13 @@ defmodule JMESTest do
       persons = [%{"name" => "alice", "age" => 20}, %{"name" => "bob", "age" => 40}]
       assert_value search("min_by(@, &age).name", persons) == "alice"
     end
+
+    @tag :wip
+    test "underscore" do
+      assert_value JMES.search("keyA", %{"key_a" => true}, underscore: true) == {:ok, true}
+      assert_value JMES.search("key_a", %{"key_a" => true}, underscore: true) == {:ok, true}
+      assert_value JMES.search("keyA", %{"key_a" => true}, underscore: false) == {:ok, nil}
+    end
   end
 
   defp search(expr, data) do

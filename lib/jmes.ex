@@ -19,23 +19,32 @@ defmodule JMES do
   The expression can be a string, a charlist, or an Abstract Syntax Tree (see
   `JMES.Parser.parse/1`).
 
+  ## Options
+
+  - `underscore`: if `true`, underscore identifiers in the expression (default `false`)
+
   ## Examples
 
       iex> JMES.search("[name, age]", %{"name" => "Alice", "age" => 28, "place" => "wonderland"})
       {:ok, ["Alice", 28]}
   """
-  @spec search(ast, any) :: {:ok, any} | error
-  def search(expr, data) when is_tuple(expr) or is_atom(expr) do
-    case eval(expr, data) do
+  @spec search(ast | expr, any) :: {:ok, any} | error
+  def search(expr, data) do
+    search(expr, data, [])
+  end
+
+  @spec search(ast, any, keyword) :: {:ok, any} | error
+  def search(expr, data, opts) when is_tuple(expr) or is_atom(expr) do
+    case eval(expr, data, opts) do
       {:ok, value} -> {:ok, unproject(value)}
       err -> err
     end
   end
 
-  @spec search(expr, any) :: {:ok, any} | error
-  def search(expr, data) do
+  @spec search(expr, any, keyword) :: {:ok, any} | error
+  def search(expr, data, opts) do
     with {:ok, ast} <- Parser.parse(expr) do
-      search(ast, data)
+      search(ast, data, opts)
     end
   end
 
@@ -43,11 +52,11 @@ defmodule JMES do
   # Projection
   # ==============================================================================================
 
-  @spec eval(ast, any) :: {:ok, any} | error
-  defp eval(ast, {:project, data}) do
+  @spec eval(ast, any, keyword) :: {:ok, any} | error
+  defp eval(ast, {:project, data}, opts) do
     List.foldr(data, {:ok, {:project, []}}, fn
       item, {:ok, {:project, list}} = acc ->
-        case eval(ast, item) do
+        case eval(ast, item, opts) do
           {:ok, value} when is_nil(value) -> acc
           {:ok, value} -> {:ok, {:project, [value | list]}}
           err -> err
@@ -62,7 +71,7 @@ defmodule JMES do
   # Wildcard
   # ==============================================================================================
 
-  defp eval(:wildcard, data) when is_map(data) do
+  defp eval(:wildcard, data, _opts) when is_map(data) do
     values = Map.values(data)
 
     if length(values) > 0 do
@@ -72,24 +81,24 @@ defmodule JMES do
     end
   end
 
-  defp eval(:wildcard, _data) do
+  defp eval(:wildcard, _data, _opts) do
     {:ok, nil}
   end
 
-  defp eval({:wildcard, expr}, data) do
-    case eval(expr, data) do
-      {:ok, {:project, _date} = value} -> eval({:list, [:wildcard]}, value)
+  defp eval({:wildcard, expr}, data, opts) do
+    case eval(expr, data, opts) do
+      {:ok, {:project, _date} = value} -> eval({:list, [:wildcard]}, value, opts)
       {:ok, value} when is_list(value) and length(value) > 0 -> {:ok, {:project, value}}
       {:ok, _value} -> {:ok, nil}
       err -> err
     end
   end
 
-  defp eval({:list, [:wildcard]}, data) when is_list(data) do
+  defp eval({:list, [:wildcard]}, data, _opts) when is_list(data) do
     {:ok, {:project, data}}
   end
 
-  defp eval({:list, [:wildcard]}, _data) do
+  defp eval({:list, [:wildcard]}, _data, _opts) do
     {:ok, nil}
   end
 
@@ -97,11 +106,14 @@ defmodule JMES do
   # ID
   # ==============================================================================================
 
-  defp eval({:id, id}, data) when is_map(data) do
+  defp eval({:id, id}, data, opts) when is_map(data) do
+    underscore = Keyword.get(opts, :underscore, false)
+    id = if underscore, do: Macro.underscore(id), else: id
+
     {:ok, Map.get(data, id)}
   end
 
-  defp eval({:id, _id}, _data) do
+  defp eval({:id, _id}, _data, _opts) do
     {:ok, nil}
   end
 
@@ -109,31 +121,31 @@ defmodule JMES do
   # Literals
   # ==============================================================================================
 
-  defp eval({:string, value}, _data) do
+  defp eval({:string, value}, _data, _opts) do
     {:ok, value}
   end
 
-  defp eval({:json, value}, _data) do
+  defp eval({:json, value}, _data, _opts) do
     Poison.decode(value)
   end
 
-  defp eval(value, _data) when is_binary(value) do
+  defp eval(value, _data, _opts) when is_binary(value) do
     {:ok, value}
   end
 
-  defp eval(value, _data) when is_number(value) do
+  defp eval(value, _data, _opts) when is_number(value) do
     {:ok, value}
   end
 
-  defp eval(value, _data) when is_list(value) do
+  defp eval(value, _data, _opts) when is_list(value) do
     {:ok, value}
   end
 
-  defp eval(value, _data) when is_map(value) do
+  defp eval(value, _data, _opts) when is_map(value) do
     {:ok, value}
   end
 
-  defp eval(value, _data) when is_nil(value) do
+  defp eval(value, _data, _opts) when is_nil(value) do
     {:ok, nil}
   end
 
@@ -141,7 +153,7 @@ defmodule JMES do
   # Node
   # ==============================================================================================
 
-  defp eval(:node, data) do
+  defp eval(:node, data, _opts) do
     {:ok, data}
   end
 
@@ -149,9 +161,9 @@ defmodule JMES do
   # Pipe
   # ==============================================================================================
 
-  defp eval({:pipe, [left, right]}, data) do
-    with {:ok, left} <- eval(left, data) do
-      eval(right, unproject(left))
+  defp eval({:pipe, [left, right]}, data, opts) do
+    with {:ok, left} <- eval(left, data, opts) do
+      eval(right, unproject(left), opts)
     end
   end
 
@@ -159,40 +171,40 @@ defmodule JMES do
   # Logical Operators
   # ==============================================================================================
 
-  defp eval({:and, [left, right]}, data) do
-    binop_ok(left, right, data, &if(truthy?(&1), do: &2, else: &1))
+  defp eval({:and, [left, right]}, data, opts) do
+    binop_ok(left, right, data, &if(truthy?(&1), do: &2, else: &1), opts)
   end
 
-  defp eval({:or, [left, right]}, data) do
-    binop_ok(left, right, data, &if(truthy?(&1), do: &1, else: &2))
+  defp eval({:or, [left, right]}, data, opts) do
+    binop_ok(left, right, data, &if(truthy?(&1), do: &1, else: &2), opts)
   end
 
-  defp eval({:eq, [left, right]}, data) do
-    binop_ok(left, right, data, &===/2)
+  defp eval({:eq, [left, right]}, data, opts) do
+    binop_ok(left, right, data, &===/2, opts)
   end
 
-  defp eval({:neq, [left, right]}, data) do
-    binop_ok(left, right, data, &!==/2)
+  defp eval({:neq, [left, right]}, data, opts) do
+    binop_ok(left, right, data, &!==/2, opts)
   end
 
-  defp eval({:lt, [left, right]}, data) do
-    compare(left, right, data, &</2)
+  defp eval({:lt, [left, right]}, data, opts) do
+    compare(left, right, data, &</2, opts)
   end
 
-  defp eval({:gt, [left, right]}, data) do
-    compare(left, right, data, &>/2)
+  defp eval({:gt, [left, right]}, data, opts) do
+    compare(left, right, data, &>/2, opts)
   end
 
-  defp eval({:lte, [left, right]}, data) do
-    compare(left, right, data, &<=/2)
+  defp eval({:lte, [left, right]}, data, opts) do
+    compare(left, right, data, &<=/2, opts)
   end
 
-  defp eval({:gte, [left, right]}, data) do
-    compare(left, right, data, &>=/2)
+  defp eval({:gte, [left, right]}, data, opts) do
+    compare(left, right, data, &>=/2, opts)
   end
 
-  defp eval({:not, expr}, data) do
-    with {:ok, value} <- eval(expr, data),
+  defp eval({:not, expr}, data, opts) do
+    with {:ok, value} <- eval(expr, data, opts),
          value = unproject(value) do
       {:ok, !truthy?(value)}
     end
@@ -202,9 +214,9 @@ defmodule JMES do
   # Child
   # ==============================================================================================
 
-  defp eval({:child, [expr, child]}, data) do
-    with {:ok, parent} <- eval(expr, data) do
-      eval(child, parent)
+  defp eval({:child, [expr, child]}, data, opts) do
+    with {:ok, parent} <- eval(expr, data, opts) do
+      eval(child, parent, opts)
     end
   end
 
@@ -212,18 +224,18 @@ defmodule JMES do
   # Flatten
   # ==============================================================================================
 
-  defp eval(:flatten, data) when is_list(data) do
+  defp eval(:flatten, data, _opts) when is_list(data) do
     {:ok, {:project, flatten(data)}}
   end
 
-  defp eval(:flatten, _data) do
+  defp eval(:flatten, _data, _opts) do
     {:ok, nil}
   end
 
-  defp eval({:flatten, expr}, data) do
-    with {:ok, parent} <- eval(expr, data),
+  defp eval({:flatten, expr}, data, opts) do
+    with {:ok, parent} <- eval(expr, data, opts),
          parent = unproject(parent) do
-      eval(:flatten, parent)
+      eval(:flatten, parent, opts)
     end
   end
 
@@ -231,17 +243,17 @@ defmodule JMES do
   # Index
   # ==============================================================================================
 
-  defp eval({:index, [nil, index]}, data) when is_integer(index) and is_list(data) do
+  defp eval({:index, [nil, index]}, data, _opts) when is_integer(index) and is_list(data) do
     {:ok, Enum.at(data, index)}
   end
 
-  defp eval({:index, [expr, index]}, data) when is_integer(index) and not is_nil(expr) do
-    with {:ok, parent} <- eval(expr, data) do
-      eval({:index, [nil, index]}, parent)
+  defp eval({:index, [expr, index]}, data, opts) when is_integer(index) and not is_nil(expr) do
+    with {:ok, parent} <- eval(expr, data, opts) do
+      eval({:index, [nil, index]}, parent, opts)
     end
   end
 
-  defp eval({:index, [_expr, _index]}, _data) do
+  defp eval({:index, [_expr, _index]}, _data, _opts) do
     {:ok, nil}
   end
 
@@ -249,16 +261,16 @@ defmodule JMES do
   # Slice
   # ==============================================================================================
 
-  defp eval({:slice, [_expr, [_start, _stop, _step]]}, nil) do
+  defp eval({:slice, [_expr, [_start, _stop, _step]]}, nil, _opts) do
     {:ok, nil}
   end
 
-  defp eval({:slice, [nil, [start, stop, step]]}, data) do
+  defp eval({:slice, [nil, [start, stop, step]]}, data, _opts) do
     project_slice(data, start, stop, step)
   end
 
-  defp eval({:slice, [expr, [start, stop, step]]}, data) do
-    with {:ok, parent} <- eval(expr, data) do
+  defp eval({:slice, [expr, [start, stop, step]]}, data, opts) do
+    with {:ok, parent} <- eval(expr, data, opts) do
       project_slice(parent, start, stop, step)
     end
   end
@@ -267,14 +279,14 @@ defmodule JMES do
   # Filter
   # ==============================================================================================
 
-  defp eval({:filter, [_expr, _query]}, nil) do
+  defp eval({:filter, [_expr, _query]}, nil, _opts) do
     {:ok, nil}
   end
 
-  defp eval({:filter, [nil, query]}, data) when is_list(data) do
+  defp eval({:filter, [nil, query]}, data, opts) when is_list(data) do
     List.foldr(data, {:ok, {:project, []}}, fn
       item, {:ok, {:project, list}} = acc ->
-        case eval(query, item) do
+        case eval(query, item, opts) do
           {:ok, value} ->
             if truthy?(unproject(value)) do
               {:ok, {:project, [item | list]}}
@@ -291,13 +303,13 @@ defmodule JMES do
     end)
   end
 
-  defp eval({:filter, [nil, _query]}, _data) do
+  defp eval({:filter, [nil, _query]}, _data, _opts) do
     {:ok, nil}
   end
 
-  defp eval({:filter, [expr, query]}, data) do
-    with {:ok, parent} <- eval(expr, data) do
-      eval({:filter, [nil, query]}, parent)
+  defp eval({:filter, [expr, query]}, data, opts) do
+    with {:ok, parent} <- eval(expr, data, opts) do
+      eval({:filter, [nil, query]}, parent, opts)
     end
   end
 
@@ -305,12 +317,12 @@ defmodule JMES do
   # List
   # ==============================================================================================
 
-  defp eval({:list, _exprs}, nil) do
+  defp eval({:list, _exprs}, nil, _opts) do
     {:ok, nil}
   end
 
-  defp eval({:list, exprs}, data) do
-    with {:ok, value} <- eval_list(exprs, data) do
+  defp eval({:list, exprs}, data, opts) do
+    with {:ok, value} <- eval_list(exprs, data, opts) do
       {:ok, value}
     end
   end
@@ -319,14 +331,14 @@ defmodule JMES do
   # Dictionary
   # ==============================================================================================
 
-  defp eval({:dict, _keyvalv}, nil) do
+  defp eval({:dict, _keyvalv}, nil, _opts) do
     {:ok, nil}
   end
 
-  defp eval({:dict, keyvalv}, data) do
+  defp eval({:dict, keyvalv}, data, opts) do
     List.foldl(keyvalv, {:ok, %{}}, fn
       [key, expr], {:ok, map} ->
-        case eval(expr, data) do
+        case eval(expr, data, opts) do
           {:ok, value} -> {:ok, Map.put(map, key, value)}
           err -> err
         end
@@ -340,14 +352,14 @@ defmodule JMES do
   # Call
   # ==============================================================================================
 
-  defp eval({:call, [name, argv]}, data) do
-    with {:ok, args} <- eval_list(argv, data),
+  defp eval({:call, [name, argv]}, data, opts) do
+    with {:ok, args} <- eval_list(argv, data, opts),
          args = unproject(args) do
-      Functions.call(name, args)
+      Functions.call(name, args, opts)
     end
   end
 
-  defp eval({:quote, expr}, _data) do
+  defp eval({:quote, expr}, _data, _opts) do
     {:ok, expr}
   end
 
@@ -355,7 +367,7 @@ defmodule JMES do
   # Fallback
   # ==============================================================================================
 
-  defp eval(ast, _data) do
+  defp eval(ast, _data, _opts) do
     {:error, {:invalid_ast, ast}}
   end
 
@@ -382,32 +394,44 @@ defmodule JMES do
     data
   end
 
-  @spec binop(expr, expr, any, (any, any -> {:ok, any} | error)) :: {:ok, any} | error
-  defp binop(left, right, data, fun) do
-    with {:ok, left} <- eval(left, data),
-         {:ok, right} <- eval(right, data),
+  @spec binop(expr, expr, any, (any, any -> {:ok, any} | error), keyword) :: {:ok, any} | error
+  defp binop(left, right, data, fun, opts) do
+    with {:ok, left} <- eval(left, data, opts),
+         {:ok, right} <- eval(right, data, opts),
          left = unproject(left),
          right = unproject(right) do
       fun.(left, right)
     end
   end
 
-  @spec binop_ok(expr, expr, any, (any, any -> any)) :: {:ok, any}
-  defp binop_ok(left, right, data, fun) do
-    binop(left, right, data, fn left, right ->
-      {:ok, fun.(left, right)}
-    end)
+  @spec binop_ok(expr, expr, any, (any, any -> any), keyword) :: {:ok, any}
+  defp binop_ok(left, right, data, fun, opts) do
+    binop(
+      left,
+      right,
+      data,
+      fn left, right ->
+        {:ok, fun.(left, right)}
+      end,
+      opts
+    )
   end
 
-  @spec compare(expr, expr, any, (any, any -> boolean)) :: {:ok, boolean} | error
-  defp compare(left, right, data, fun) do
-    binop(left, right, data, fn left, right ->
-      if is_number(left) and is_number(right) do
-        {:ok, fun.(left, right)}
-      else
-        {:error, :invalid_type}
-      end
-    end)
+  @spec compare(expr, expr, any, (any, any -> boolean), keyword) :: {:ok, boolean} | error
+  defp compare(left, right, data, fun, opts) do
+    binop(
+      left,
+      right,
+      data,
+      fn left, right ->
+        if is_number(left) and is_number(right) do
+          {:ok, fun.(left, right)}
+        else
+          {:error, :invalid_type}
+        end
+      end,
+      opts
+    )
   end
 
   @spec truthy?(any) :: boolean
@@ -505,11 +529,11 @@ defmodule JMES do
     end
   end
 
-  @spec eval_list([ast], any) :: {:ok, list} | error
-  defp eval_list(exprs, data) do
+  @spec eval_list([ast], any, keyword) :: {:ok, list} | error
+  defp eval_list(exprs, data, opts) do
     List.foldr(exprs, {:ok, []}, fn
       expr, {:ok, list} ->
-        case eval(expr, data) do
+        case eval(expr, data, opts) do
           {:ok, value} -> {:ok, [value | list]}
           err -> err
         end
