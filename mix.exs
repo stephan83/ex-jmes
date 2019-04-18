@@ -16,8 +16,8 @@ defmodule JMES.MixProject do
         "coveralls.html": :test
       ],
       description: "JMES implements JMESPath, a query language for JSON.",
-      licenses: ["MIT"],
-      source_url: "https://github.com/stephan83/ex-jmes"
+      source_url: "https://github.com/stephan83/ex-jmes",
+      package: package()
     ]
   end
 
@@ -42,6 +42,13 @@ defmodule JMES.MixProject do
       {:excoveralls, "~> 0.9.0", only: :test, runtime: false},
       {:mix_test_watch, "~> 0.9.0", only: :dev, runtime: false},
       {:poison, "~> 4.0.1"}
+    ]
+  end
+
+  defp package do
+    [
+      licenses: ["MIT"],
+      links: %{"GitHub" => "https://github.com/stephan83/ex-jmes"}
     ]
   end
 end
