@@ -1,5 +1,7 @@
 # JMES
 
+[![Build Status](https://travis-ci.org/stephan83/ex-jmes.svg?branch=master)](https://travis-ci.org/stephan83/ex-jmes)
+
 JMES implements JMESPath, a query language for JSON.
 
 It passes the official compliance tests.
