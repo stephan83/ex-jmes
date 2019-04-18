@@ -14,7 +14,10 @@ defmodule JMES.MixProject do
         "coveralls.detail": :test,
         "coveralls.post": :test,
         "coveralls.html": :test
-      ]
+      ],
+      description: "JMES implements JMESPath, a query language for JSON.",
+      licenses: ["MIT"],
+      source_url: "https://github.com/stephan83/ex-jmes"
     ]
   end
 
