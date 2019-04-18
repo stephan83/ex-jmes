@@ -13,6 +13,7 @@ defmodule JMESTest do
 
     test "identifier" do
       assert_value search("a", %{"a" => "b"}) == "b"
+      assert_value search("a", %{a: "b"}) == "b"
       assert_value search("b", %{"a" => "b"}) == nil
       assert_value search("b", true) == nil
     end
@@ -164,6 +165,7 @@ defmodule JMESTest do
 
     test "keys" do
       assert_value search("keys(@)", %{"a" => 1, "b" => 2}) == ["a", "b"]
+      assert_value search("keys(@)", %{a: 1, b: 2}) == [:a, :b]
     end
 
     test "length" do
@@ -197,7 +199,6 @@ defmodule JMESTest do
       assert_value search("min_by(@, &age).name", persons) == "alice"
     end
 
-    @tag :wip
     test "underscore" do
       assert_value JMES.search("keyA", %{"key_a" => true}, underscore: true) == {:ok, true}
       assert_value JMES.search("key_a", %{"key_a" => true}, underscore: true) == {:ok, true}

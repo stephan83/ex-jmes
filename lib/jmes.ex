@@ -109,8 +109,13 @@ defmodule JMES do
   defp eval({:id, id}, data, opts) when is_map(data) do
     underscore = Keyword.get(opts, :underscore, false)
     id = if underscore, do: Macro.underscore(id), else: id
+    value = Map.get(data, id)
 
-    {:ok, Map.get(data, id)}
+    if is_nil(value) do
+      {:ok, Map.get(data, String.to_atom(id))}
+    else
+      {:ok, value}
+    end
   end
 
   defp eval({:id, _id}, _data, _opts) do
