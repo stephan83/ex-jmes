@@ -22,6 +22,9 @@ defmodule JMES do
   ## Options
 
   - `underscore`: if `true`, underscore identifiers in the expression (default `false`)
+  - `custom_functions`: if specified, JMES will attempt to call functions it doesn't know
+                        using `call(name, args, options)` in the specificied module
+                        (`JMES.Functions.Handler` behaviour)
 
   ## Examples
 

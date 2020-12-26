@@ -204,6 +204,17 @@ defmodule JMESTest do
       assert_value JMES.search("key_a", %{"key_a" => true}, underscore: true) == {:ok, true}
       assert_value JMES.search("keyA", %{"key_a" => true}, underscore: false) == {:ok, nil}
     end
+
+    defmodule CustomFunctions do
+      @behaviour JMES.Functions.Handler
+      def call("myfun", _args, _opts) do
+        {:ok, 123}
+      end
+    end
+
+    test "custom functions" do
+      assert_value JMES.search("myfun()", %{}, custom_functions: CustomFunctions) == {:ok, 123}
+    end
   end
 
   defp search(expr, data) do
