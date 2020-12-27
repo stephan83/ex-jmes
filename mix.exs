@@ -38,7 +38,7 @@ defmodule JMES.MixProject do
       {:credo, "0.9.0", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.0.0-rc.4", only: :dev, runtime: false},
       {:earmark, "~> 1.3", only: :dev, runtime: false},
-      {:ex_doc, "~> 0.19.3", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.23.0", only: :dev, runtime: false},
       {:excoveralls, "~> 0.9.0", only: :test, runtime: false},
       {:mix_test_watch, "~> 0.9.0", only: :dev, runtime: false},
       {:poison, "~> 4.0.1"}
