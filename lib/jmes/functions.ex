@@ -3,6 +3,12 @@ defmodule JMES.Functions do
   Contains builtin functions.
   """
 
+  defmodule Handler do
+    @callback call(String.t(), list, keyword) :: {:ok, term} | {:error, atom}
+  end
+
+  @behaviour Handler
+
   # ==============================================================================================
   # abs
   # ==============================================================================================
@@ -488,8 +494,12 @@ defmodule JMES.Functions do
   # Fallback
   # ==============================================================================================
 
-  def call(_name, _args, _opts) do
-    {:error, :unknown_function}
+  def call(name, args, opts) do
+    if module = opts[:custom_functions] do
+      apply(module, :call, [name, args, opts])
+    else
+      {:error, :unknown_function}
+    end
   end
 
   # ==============================================================================================
